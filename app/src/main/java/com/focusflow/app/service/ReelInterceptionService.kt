@@ -3,35 +3,41 @@ package com.focusflow.app.service
 import android.accessibilityservice.AccessibilityService
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
 
 class ReelInterceptionService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private var lastToastPkg: String? = null
+    private var lastPkg: String? = null
+
+    private val alwaysBlock = setOf(
+        "com.instagram.android",
+        "com.google.android.youtube",
+        "com.zhiliaoapp.musically"
+    )
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
         showToast("FocusFlow service ON")
-        Log.d("FocusFlowA11y", "Service connected")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
-        val pkg = event.packageName?.toString() ?: return
+        val pkg = event.packageName?.toString()?.trim() ?: return
+        if (pkg == lastPkg) return
+        lastPkg = pkg
 
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && lastToastPkg != pkg) {
-            lastToastPkg = pkg
-            showToast("Window: $pkg")
-            Log.d("FocusFlowA11y", "Window: $pkg | focus=$isFocusActive | blocked=${BlockedAppsStore.packages.value}")
-        }
+        val inStore = BlockedAppsStore.packages.value.any { it.equals(pkg, ignoreCase = true) }
+        val shouldBlock = isFocusActive && (inStore || alwaysBlock.contains(pkg))
 
-        if (isFocusActive && BlockedAppsStore.packages.value.contains(pkg)) {
-            showToast("BLOCKING $pkg")
-            performGlobalAction(GLOBAL_ACTION_HOME)
+        showToast("pkg=$pkg focus=$isFocusActive store=$inStore block=$shouldBlock")
+
+        if (shouldBlock) {
+            val homeOk = performGlobalAction(GLOBAL_ACTION_HOME)
+            if (!homeOk) performGlobalAction(GLOBAL_ACTION_BACK)
+            showToast("Tried block on $pkg (home=$homeOk)")
         }
     }
 
