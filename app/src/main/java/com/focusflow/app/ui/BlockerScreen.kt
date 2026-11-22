@@ -37,39 +37,45 @@ fun BlockerScreen() {
     val blocked by BlockedAppsStore.packages.collectAsState()
     val blocker = remember { AppBlocker(context) }
     var hasPermission by remember { mutableStateOf(blocker.hasUsagePermission()) }
+    var hasOverlay by remember { mutableStateOf(blocker.hasOverlayPermission()) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 hasPermission = blocker.hasUsagePermission()
+                hasOverlay = blocker.hasOverlayPermission()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
         Text("Block Distractions", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
         Text("These apps are blocked while you focus", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
         Spacer(Modifier.height(20.dp))
 
-        if (!hasPermission) {
+        if (!hasPermission || !hasOverlay) {
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Permission needed", fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Grant Usage Access so FocusFlow can detect when you open blocked apps.", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }, shape = RoundedCornerShape(12.dp)) {
-                        Text("Open Settings")
+                    Text("Permissions needed for reliable blocking", fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(8.dp))
+                    if (!hasPermission) {
+                        Button(onClick = { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }, shape = RoundedCornerShape(12.dp)) {
+                            Text("Grant Usage Access")
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    if (!hasOverlay) {
+                        Button(onClick = { blocker.requestOverlayPermission() }, shape = RoundedCornerShape(12.dp)) {
+                            Text("Allow Display Over Other Apps")
+                        }
                     }
                 }
             }
             Spacer(Modifier.height(16.dp))
         } else {
-            Text("\u2713 Usage Access granted", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            Text("✓ Usage Access and Overlay granted", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(12.dp))
         }
 
