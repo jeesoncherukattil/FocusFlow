@@ -1,10 +1,12 @@
 package com.focusflow.app.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Intent
 import android.view.accessibility.AccessibilityEvent
 import com.focusflow.app.ui.overlay.ReelCounterOverlay
 
 class ReelInterceptionService : AccessibilityService() {
+
     private lateinit var overlay: ReelCounterOverlay
     private var reelCount = 0
     private var lastPackage: String? = null
@@ -12,12 +14,25 @@ class ReelInterceptionService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = ReelCounterOverlay(this)
+        instance = this
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         val pkg = event.packageName?.toString() ?: return
-        if (pkg !in TARGET_PACKAGES) {
+
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            if (BlockedAppsStore.packages.value.contains(pkg) && isFocusActive) {
+                val intent = Intent(this, BlockScreenActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    putExtra("blocked_package", pkg)
+                }
+                startActivity(intent)
+            }
+        }
+
+        val isTarget = pkg in TARGET_PACKAGES
+        if (!isTarget) {
             if (lastPackage in TARGET_PACKAGES) overlay.hide()
             lastPackage = pkg
             return
@@ -31,9 +46,11 @@ class ReelInterceptionService : AccessibilityService() {
     }
 
     override fun onInterrupt() { overlay.hide() }
-    override fun onDestroy() { overlay.hide(); super.onDestroy() }
+    override fun onDestroy() { overlay.hide(); instance = null; super.onDestroy() }
 
     companion object {
+        @Volatile var instance: ReelInterceptionService? = null
+        @Volatile var isFocusActive: Boolean = false
         val TARGET_PACKAGES = setOf(
             "com.instagram.android",
             "com.google.android.youtube",

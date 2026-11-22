@@ -1,5 +1,6 @@
 package com.focusflow.app.service
 
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
@@ -13,6 +14,7 @@ class AppBlocker(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private var isMonitoring = false
     private var blockedPackages: Set<String> = emptySet()
+    private var lastBlockedPackage: String? = null
 
     fun startMonitoring(packages: Set<String>) {
         blockedPackages = packages
@@ -23,6 +25,7 @@ class AppBlocker(private val context: Context) {
 
     fun stopMonitoring() {
         isMonitoring = false
+        lastBlockedPackage = null
         handler.removeCallbacks(checkRunnable)
     }
 
@@ -31,21 +34,36 @@ class AppBlocker(private val context: Context) {
             if (!isMonitoring) return
             val foreground = getForegroundPackage()
             if (foreground != null && blockedPackages.contains(foreground)) {
-                val intent = Intent(context, BlockScreenActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    putExtra("blocked_package", foreground)
+                if (lastBlockedPackage != foreground) {
+                    val intent = Intent(context, BlockScreenActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        putExtra("blocked_package", foreground)
+                    }
+                    context.startActivity(intent)
+                    lastBlockedPackage = foreground
                 }
-                context.startActivity(intent)
+            } else {
+                lastBlockedPackage = null
             }
-            handler.postDelayed(this, 1500)
+            handler.postDelayed(this, 800)
         }
     }
 
     private fun getForegroundPackage(): String? {
         val end = System.currentTimeMillis()
-        val start = end - 5000
-        val stats = usageStats.queryUsageStats(UsageStatsManager.INTERVAL_BEST, start, end)
-        return stats.maxByOrNull { it.lastTimeUsed }?.packageName
+        val start = end - 10_000
+        val events = usageStats.queryEvents(start, end)
+        val event = UsageEvents.Event()
+        var lastForeground: String? = null
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
+                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
+            ) {
+                lastForeground = event.packageName
+            }
+        }
+        return lastForeground
     }
 
     fun hasUsagePermission(): Boolean {
