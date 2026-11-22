@@ -2,46 +2,50 @@ package com.focusflow.app.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
+import android.widget.Toast
 import com.focusflow.app.ui.overlay.ReelCounterOverlay
 
 class ReelInterceptionService : AccessibilityService() {
 
     private lateinit var overlay: ReelCounterOverlay
-    private var reelCount = 0
-    private var lastPackage: String? = null
+    private var lastBlocked: String? = null
+    private val handler = Handler(Looper.getMainLooper())
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         overlay = ReelCounterOverlay(this)
         instance = this
+        Toast.makeText(this, "FocusFlow Accessibility connected", Toast.LENGTH_SHORT).show()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
         val pkg = event.packageName?.toString() ?: return
 
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
-            if (BlockedAppsStore.packages.value.contains(pkg) && isFocusActive) {
-                val intent = Intent(this, BlockScreenActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    putExtra("blocked_package", pkg)
+        if (isFocusActive && BlockedAppsStore.packages.value.contains(pkg)) {
+            if (lastBlocked != pkg) {
+                lastBlocked = pkg
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                handler.post {
+                    Toast.makeText(this, "Blocked: $pkg", Toast.LENGTH_SHORT).show()
                 }
-                startActivity(intent)
+                try {
+                    val intent = Intent(this, BlockScreenActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        putExtra("blocked_package", pkg)
+                    }
+                    startActivity(intent)
+                } catch (_: Exception) {}
             }
+        } else {
+            lastBlocked = null
         }
 
-        val isTarget = pkg in TARGET_PACKAGES
-        if (!isTarget) {
-            if (lastPackage in TARGET_PACKAGES) overlay.hide()
-            lastPackage = pkg
-            return
-        }
-        lastPackage = pkg
-        if (event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
-            reelCount++
-            overlay.show(reelCount, 300)
-            overlay.update(reelCount, 300)
+        if (pkg in TARGET_PACKAGES && event.eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            overlay.show(0, 0)
         }
     }
 
