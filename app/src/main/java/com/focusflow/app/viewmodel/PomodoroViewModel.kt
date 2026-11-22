@@ -49,10 +49,10 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
 
     private fun start() {
         val state = _timerState.value
+        ReelInterceptionService.isFocusActive = state.isFocusPhase
         if (state.isFocusPhase) {
             viewModelScope.launch { smartHome.onFocusStart() }
             appBlocker.startMonitoring(BlockedAppsStore.packages.value)
-            ReelInterceptionService.isFocusActive = true
             getApplication<Application>().startForegroundService(Intent(getApplication(), PomodoroService::class.java))
         }
         _timerState.value = state.copy(isRunning = true)
@@ -118,6 +118,31 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
             } catch (_: Exception) {}
         }
     }
+
+    fun setFocusMinutes(minutes: Int) {
+        if (!_timerState.value.isRunning && _timerState.value.isFocusPhase) {
+            focusMinutes = minutes.coerceIn(1, 120)
+            _timerState.value = _timerState.value.copy(
+                remainingSeconds = focusMinutes * 60,
+                totalSeconds = focusMinutes * 60,
+                progress = 1f
+            )
+        }
+    }
+
+    fun setBreakMinutes(minutes: Int) {
+        if (!_timerState.value.isRunning && !_timerState.value.isFocusPhase) {
+            breakMinutes = minutes.coerceIn(1, 60)
+            _timerState.value = _timerState.value.copy(
+                remainingSeconds = breakMinutes * 60,
+                totalSeconds = breakMinutes * 60,
+                progress = 1f
+            )
+        }
+    }
+
+    fun getFocusMinutes() = focusMinutes
+    fun getBreakMinutes() = breakMinutes
 
     fun setTag(tag: String) {
         if (!_timerState.value.isRunning) {
