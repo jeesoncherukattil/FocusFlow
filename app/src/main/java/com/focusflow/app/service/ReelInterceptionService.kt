@@ -9,40 +9,40 @@ import android.widget.Toast
 class ReelInterceptionService : AccessibilityService() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private var lastPkg: String? = null
+    private var lastBlockedPkg: String? = null
+    private var lastBlockTime = 0L
 
     private val alwaysBlock = setOf(
         "com.instagram.android",
         "com.google.android.youtube",
-        "com.zhiliaoapp.musically"
+        "com.zhiliaoapp.musically",
+        "com.facebook.katana",
+        "com.twitter.android"
     )
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        showToast("FocusFlow service ON")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        if (!isFocusActive) return
+
         val pkg = event.packageName?.toString()?.trim() ?: return
-        if (pkg == lastPkg) return
-        lastPkg = pkg
+        val shouldBlock = BlockedAppsStore.packages.value.any { it.equals(pkg, true) } || alwaysBlock.contains(pkg)
+        if (!shouldBlock) return
 
-        val inStore = BlockedAppsStore.packages.value.any { it.equals(pkg, ignoreCase = true) }
-        val shouldBlock = isFocusActive && (inStore || alwaysBlock.contains(pkg))
+        val now = System.currentTimeMillis()
+        if (pkg == lastBlockedPkg && now - lastBlockTime < 600) return
 
-        showToast("pkg=$pkg focus=$isFocusActive store=$inStore block=$shouldBlock")
+        lastBlockedPkg = pkg
+        lastBlockTime = now
 
-        if (shouldBlock) {
-            val homeOk = performGlobalAction(GLOBAL_ACTION_HOME)
-            if (!homeOk) performGlobalAction(GLOBAL_ACTION_BACK)
-            showToast("Tried block on $pkg (home=$homeOk)")
-        }
-    }
+        val homeOk = performGlobalAction(GLOBAL_ACTION_HOME)
+        if (!homeOk) performGlobalAction(GLOBAL_ACTION_BACK)
 
-    private fun showToast(msg: String) {
-        handler.post { Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() }
+        handler.post { Toast.makeText(this, "Blocked – stay focused", Toast.LENGTH_SHORT).show() }
     }
 
     override fun onInterrupt() {}
