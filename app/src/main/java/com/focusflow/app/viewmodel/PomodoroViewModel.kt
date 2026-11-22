@@ -1,6 +1,7 @@
 package com.focusflow.app.viewmodel
 
 import android.app.Application
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.focusflow.app.FocusFlowApp
@@ -8,6 +9,7 @@ import com.focusflow.app.data.PomodoroSession
 import com.focusflow.app.iot.SmartHomeController
 import com.focusflow.app.service.AppBlocker
 import com.focusflow.app.service.BlockedAppsStore
+import com.focusflow.app.service.PomodoroService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,6 +33,10 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
     private val smartHome = SmartHomeController()
     private val appBlocker = AppBlocker(application)
 
+    init {
+        BlockedAppsStore.init(application)
+    }
+
     private val _timerState = MutableStateFlow(TimerState())
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
 
@@ -47,6 +53,8 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
         if (state.isFocusPhase) {
             viewModelScope.launch { smartHome.onFocusStart() }
             appBlocker.startMonitoring(BlockedAppsStore.packages.value)
+            val intent = Intent(getApplication(), PomodoroService::class.java)
+            getApplication<Application>().startForegroundService(intent)
         }
         _timerState.value = state.copy(isRunning = true)
         timerJob = viewModelScope.launch {
@@ -66,6 +74,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
     private fun pause() {
         timerJob?.cancel()
         appBlocker.stopMonitoring()
+        getApplication<Application>().stopService(Intent(getApplication(), PomodoroService::class.java))
         _timerState.value = _timerState.value.copy(isRunning = false)
     }
 
@@ -74,8 +83,10 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
         if (state.isFocusPhase) {
             viewModelScope.launch { smartHome.onFocusEnd() }
             appBlocker.stopMonitoring()
+            getApplication<Application>().stopService(Intent(getApplication(), PomodoroService::class.java))
             saveSession(true)
             _timerState.value = state.copy(
+                isRunning = false,
                 isFocusPhase = false,
                 remainingSeconds = breakMinutes * 60,
                 totalSeconds = breakMinutes * 60,
@@ -84,27 +95,29 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
             )
         } else {
             _timerState.value = state.copy(
+                isRunning = false,
                 isFocusPhase = true,
                 remainingSeconds = focusMinutes * 60,
                 totalSeconds = focusMinutes * 60,
                 progress = 1f
             )
         }
-        start()
     }
 
     private fun saveSession(completed: Boolean) {
         viewModelScope.launch {
-            db.sessionDao().insert(
-                PomodoroSession(
-                    activityTag = _timerState.value.currentTag,
-                    focusMinutes = focusMinutes,
-                    breakMinutes = breakMinutes,
-                    completed = completed,
-                    startTime = Instant.now().minusSeconds(focusMinutes * 60L),
-                    endTime = Instant.now()
+            try {
+                db.sessionDao().insert(
+                    PomodoroSession(
+                        activityTag = _timerState.value.currentTag,
+                        focusMinutes = focusMinutes,
+                        breakMinutes = breakMinutes,
+                        completed = completed,
+                        startTime = Instant.now().minusSeconds(focusMinutes * 60L),
+                        endTime = Instant.now()
+                    )
                 )
-            )
+            } catch (_: Exception) { }
         }
     }
 
@@ -117,6 +130,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
     fun reset() {
         timerJob?.cancel()
         appBlocker.stopMonitoring()
+        getApplication<Application>().stopService(Intent(getApplication(), PomodoroService::class.java))
         _timerState.value = TimerState(currentTag = _timerState.value.currentTag)
     }
 }
