@@ -10,6 +10,6 @@ class FocusFlowApp : Application() {
             applicationContext,
             FocusFlowDatabase::class.java,
             "focusflow.db"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
 }

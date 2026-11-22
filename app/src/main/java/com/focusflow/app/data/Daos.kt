@@ -14,8 +14,8 @@ interface SessionDao {
     @Query("SELECT * FROM pomodoro_sessions ORDER BY startTime DESC")
     fun getAllSessions(): Flow<List<PomodoroSession>>
 
-    @Query("SELECT SUM(focusMinutes) FROM pomodoro_sessions WHERE completed = 1 AND date(startTime/1000, 'unixepoch') = date('now')")
-    fun getTodayFocusMinutes(): Flow<Int?>
+    @Query("SELECT SUM(focusMinutes) FROM pomodoro_sessions WHERE completed = 1 AND startTime >= :startOfDay")
+    fun getTodayFocusMinutes(startOfDay: Long): Flow<Int?>
 }
 
 @Dao
@@ -25,4 +25,16 @@ interface TagDao {
 
     @Query("SELECT * FROM activity_tags")
     fun getAllTags(): Flow<List<ActivityTag>>
+}
+
+@Dao
+interface BlockedAppDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(app: BlockedApp)
+
+    @Query("SELECT packageName FROM blocked_apps WHERE enabled = 1")
+    fun getEnabledPackages(): Flow<List<String>>
+
+    @Query("DELETE FROM blocked_apps WHERE packageName = :pkg")
+    suspend fun remove(pkg: String)
 }
