@@ -1,7 +1,11 @@
 package com.focusflow.app.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +19,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,6 +31,24 @@ import com.focusflow.app.viewmodel.PomodoroViewModel
 @Composable
 fun HomeScreen(viewModel: PomodoroViewModel = viewModel()) {
     val state by viewModel.timerState.collectAsState()
+
+    // Custom spring specs inspired by M3 Expressive
+    val progressSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 380f) // defaultSpatial
+    val buttonSpring = spring<Float>(dampingRatio = 0.6f, stiffness = 800f)   // fastSpatial
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = state.progress,
+        animationSpec = progressSpring,
+        label = "timerProgress"
+    )
+
+    val startInteraction = remember { MutableInteractionSource() }
+    val isStartPressed by startInteraction.collectIsPressedAsState()
+    val startScale by animateFloatAsState(
+        targetValue = if (isStartPressed) 0.96f else 1f,
+        animationSpec = buttonSpring,
+        label = "startScale"
+    )
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
@@ -48,7 +71,15 @@ fun HomeScreen(viewModel: PomodoroViewModel = viewModel()) {
                 val diameter = size.minDimension - stroke
                 val topLeft = Offset(stroke / 2, stroke / 2)
                 drawArc(Color.White.copy(alpha = 0.1f), -90f, 360f, false, style = Stroke(stroke, cap = StrokeCap.Round), topLeft = topLeft, size = Size(diameter, diameter))
-                drawArc(if (state.isFocusPhase) Color(0xFF7C4DFF) else Color(0xFF26A69A), -90f, 360f * state.progress, false, style = Stroke(stroke, cap = StrokeCap.Round), topLeft = topLeft, size = Size(diameter, diameter))
+                drawArc(
+                    color = if (state.isFocusPhase) Color(0xFF7C4DFF) else Color(0xFF26A69A),
+                    startAngle = -90f,
+                    sweepAngle = 360f * animatedProgress,
+                    useCenter = false,
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                    topLeft = topLeft,
+                    size = Size(diameter, diameter)
+                )
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(formatTime(state.remainingSeconds), fontSize = 52.sp, fontWeight = FontWeight.Bold)
@@ -66,9 +97,15 @@ fun HomeScreen(viewModel: PomodoroViewModel = viewModel()) {
 
         Spacer(Modifier.height(28.dp))
 
-        Button(onClick = { viewModel.startOrPause() }, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(16.dp)) {
+        Button(
+            onClick = { viewModel.startOrPause() },
+            modifier = Modifier.fillMaxWidth().height(56.dp).graphicsLayer { scaleX = startScale; scaleY = startScale },
+            shape = RoundedCornerShape(16.dp),
+            interactionSource = startInteraction
+        ) {
             Text(if (state.isRunning) "Pause" else "Start Focus", style = MaterialTheme.typography.titleMedium)
         }
+
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
             Text("Reset")
