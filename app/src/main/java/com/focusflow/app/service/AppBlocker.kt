@@ -12,9 +12,10 @@ class AppBlocker(private val context: Context) {
 
     private val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     private val handler = Handler(Looper.getMainLooper())
+    private val overlay = BlockOverlay(context)
     private var isMonitoring = false
     private var blockedPackages: Set<String> = emptySet()
-    private var lastBlockedPackage: String? = null
+    private var lastBlocked: String? = null
 
     fun startMonitoring(packages: Set<String>) {
         blockedPackages = packages
@@ -25,7 +26,8 @@ class AppBlocker(private val context: Context) {
 
     fun stopMonitoring() {
         isMonitoring = false
-        lastBlockedPackage = null
+        lastBlocked = null
+        overlay.hide()
         handler.removeCallbacks(checkRunnable)
     }
 
@@ -34,36 +36,32 @@ class AppBlocker(private val context: Context) {
             if (!isMonitoring) return
             val foreground = getForegroundPackage()
             if (foreground != null && blockedPackages.contains(foreground)) {
-                if (lastBlockedPackage != foreground) {
-                    val intent = Intent(context, BlockScreenActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                        putExtra("blocked_package", foreground)
-                    }
-                    context.startActivity(intent)
-                    lastBlockedPackage = foreground
+                if (lastBlocked != foreground || !overlay.isShowing()) {
+                    overlay.show(foreground)
+                    lastBlocked = foreground
                 }
             } else {
-                lastBlockedPackage = null
+                lastBlocked = null
             }
-            handler.postDelayed(this, 800)
+            handler.postDelayed(this, 700)
         }
     }
 
     private fun getForegroundPackage(): String? {
         val end = System.currentTimeMillis()
-        val start = end - 10_000
+        val start = end - 8_000
         val events = usageStats.queryEvents(start, end)
         val event = UsageEvents.Event()
-        var lastForeground: String? = null
+        var last: String? = null
         while (events.hasNextEvent()) {
             events.getNextEvent(event)
             if (event.eventType == UsageEvents.Event.ACTIVITY_RESUMED ||
                 event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND
             ) {
-                lastForeground = event.packageName
+                last = event.packageName
             }
         }
-        return lastForeground
+        return last
     }
 
     fun hasUsagePermission(): Boolean {
@@ -76,7 +74,14 @@ class AppBlocker(private val context: Context) {
         return mode == android.app.AppOpsManager.MODE_ALLOWED
     }
 
-    fun requestUsagePermission() {
-        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+    fun hasOverlayPermission(): Boolean = Settings.canDrawOverlays(context)
+
+    fun requestOverlayPermission() {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+            android.net.Uri.parse("package:${context.packageName}")
+        )
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
     }
 }
