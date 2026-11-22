@@ -88,7 +88,30 @@ fun HomeScreen(viewModel: PomodoroViewModel = viewModel()) {
         Spacer(Modifier.height(10.dp))
         OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) { Text("Reset") }
 
+        Spacer(Modifier.height(20.dp))
+
+        if (!state.isRunning) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                TimeSetter(
+                    label = if (state.isFocusPhase) "Focus" else "Break",
+                    minutes = if (state.isFocusPhase) viewModel.getFocusMinutes() else viewModel.getBreakMinutes(),
+                    onChange = { mins -> if (state.isFocusPhase) viewModel.setFocusMinutes(mins) else viewModel.setBreakMinutes(mins) }
+                )
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
         Text("Sessions completed: ${state.completedSessions}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+    }
+}
+
+@Composable
+private fun TimeSetter(label: String, minutes: Int, onChange: (Int) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.width(12.dp))
+        FilledTonalButton(onClick = { onChange(minutes - 1) }, enabled = minutes > 1) { Text("−") }
+        Text("$minutes min", modifier = Modifier.padding(horizontal = 12.dp), fontWeight = FontWeight.Medium)
+        FilledTonalButton(onClick = { onChange(minutes + 1) }) { Text("+") }
     }
 }
