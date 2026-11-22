@@ -8,6 +8,7 @@ import android.os.Looper
 import android.provider.Settings
 
 class AppBlocker(private val context: Context) {
+
     private val usageStats = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
     private val handler = Handler(Looper.getMainLooper())
     private var isMonitoring = false
@@ -45,5 +46,19 @@ class AppBlocker(private val context: Context) {
         val start = end - 5000
         val stats = usageStats.queryUsageStats(UsageStatsManager.INTERVAL_BEST, start, end)
         return stats.maxByOrNull { it.lastTimeUsed }?.packageName
+    }
+
+    fun hasUsagePermission(): Boolean {
+        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            android.app.AppOpsManager.OPSTR_GET_USAGE_STATS,
+            android.os.Process.myUid(),
+            context.packageName
+        )
+        return mode == android.app.AppOpsManager.MODE_ALLOWED
+    }
+
+    fun requestUsagePermission() {
+        context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 }
