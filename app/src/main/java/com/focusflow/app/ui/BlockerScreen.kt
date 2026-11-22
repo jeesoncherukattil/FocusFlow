@@ -2,6 +2,8 @@ package com.focusflow.app.ui
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +84,16 @@ fun BlockerScreen() {
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(apps) { app ->
-                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+                val isBlocked = blocked.contains(app.packageName)
+                val scale by animateFloatAsState(
+                    targetValue = if (isBlocked) 1.02f else 1f,
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
+                    label = "card_${app.packageName}"
+                )
+                Card(
+                    modifier = Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
                     Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), modifier = Modifier.size(40.dp)) {
                             Box(contentAlignment = Alignment.Center) {
@@ -91,7 +103,7 @@ fun BlockerScreen() {
                         Spacer(Modifier.width(16.dp))
                         Text(app.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
                         Switch(
-                            checked = blocked.contains(app.packageName),
+                            checked = isBlocked,
                             onCheckedChange = { BlockedAppsStore.toggle(context.applicationContext as android.app.Application, app.packageName) }
                         )
                     }
