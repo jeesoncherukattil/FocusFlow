@@ -1,7 +1,11 @@
 package com.focusflow.app.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -32,38 +36,23 @@ import com.focusflow.app.viewmodel.PomodoroViewModel
 fun HomeScreen(viewModel: PomodoroViewModel = viewModel()) {
     val state by viewModel.timerState.collectAsState()
 
-    // Custom spring specs inspired by M3 Expressive
-    val progressSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 380f) // defaultSpatial
-    val buttonSpring = spring<Float>(dampingRatio = 0.6f, stiffness = 800f)   // fastSpatial
+    val progressSpring = spring<Float>(dampingRatio = 0.8f, stiffness = 380f)
+    val buttonSpring = spring<Float>(dampingRatio = 0.6f, stiffness = 800f)
+    val chipSpring = spring<Float>(dampingRatio = 0.7f, stiffness = 500f)
 
-    val animatedProgress by animateFloatAsState(
-        targetValue = state.progress,
-        animationSpec = progressSpring,
-        label = "timerProgress"
-    )
+    val animatedProgress by animateFloatAsState(targetValue = state.progress, animationSpec = progressSpring, label = "timerProgress")
 
     val startInteraction = remember { MutableInteractionSource() }
     val isStartPressed by startInteraction.collectIsPressedAsState()
-    val startScale by animateFloatAsState(
-        targetValue = if (isStartPressed) 0.96f else 1f,
-        animationSpec = buttonSpring,
-        label = "startScale"
-    )
+    val startScale by animateFloatAsState(targetValue = if (isStartPressed) 0.95f else 1f, animationSpec = buttonSpring, label = "startScale")
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.ic_logo),
-            contentDescription = "FocusFlow logo",
-            modifier = Modifier.size(72.dp).clip(CircleShape)
-        )
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(painter = painterResource(id = R.drawable.ic_logo), contentDescription = "FocusFlow logo", modifier = Modifier.size(72.dp).clip(CircleShape))
         Spacer(Modifier.height(12.dp))
         Text("FocusFlow", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Deep work, fewer distractions", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f))
 
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(32.dp))
 
         Box(contentAlignment = Alignment.Center) {
             Canvas(modifier = Modifier.size(260.dp)) {
@@ -71,49 +60,35 @@ fun HomeScreen(viewModel: PomodoroViewModel = viewModel()) {
                 val diameter = size.minDimension - stroke
                 val topLeft = Offset(stroke / 2, stroke / 2)
                 drawArc(Color.White.copy(alpha = 0.1f), -90f, 360f, false, style = Stroke(stroke, cap = StrokeCap.Round), topLeft = topLeft, size = Size(diameter, diameter))
-                drawArc(
-                    color = if (state.isFocusPhase) Color(0xFF7C4DFF) else Color(0xFF26A69A),
-                    startAngle = -90f,
-                    sweepAngle = 360f * animatedProgress,
-                    useCenter = false,
-                    style = Stroke(stroke, cap = StrokeCap.Round),
-                    topLeft = topLeft,
-                    size = Size(diameter, diameter)
-                )
+                drawArc(if (state.isFocusPhase) Color(0xFF7C4DFF) else Color(0xFF26A69A), -90f, 360f * animatedProgress, false, style = Stroke(stroke, cap = StrokeCap.Round), topLeft = topLeft, size = Size(diameter, diameter))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(formatTime(state.remainingSeconds), fontSize = 52.sp, fontWeight = FontWeight.Bold)
+                AnimatedContent(targetState = "%02d:%02d".format(state.remainingSeconds / 60, state.remainingSeconds % 60), transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "time") { time ->
+                    Text(time, fontSize = 52.sp, fontWeight = FontWeight.Bold)
+                }
                 Text(if (state.isFocusPhase) state.currentTag else "Break", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            }
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            listOf("Study", "Code", "Read", "Write").forEach { tag ->
-                FilterChip(selected = state.currentTag == tag, onClick = { viewModel.setTag(tag) }, label = { Text(tag) }, modifier = Modifier.weight(1f))
             }
         }
 
         Spacer(Modifier.height(28.dp))
 
-        Button(
-            onClick = { viewModel.startOrPause() },
-            modifier = Modifier.fillMaxWidth().height(56.dp).graphicsLayer { scaleX = startScale; scaleY = startScale },
-            shape = RoundedCornerShape(16.dp),
-            interactionSource = startInteraction
-        ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf("Study", "Code", "Read", "Write").forEach { tag ->
+                val selected = state.currentTag == tag
+                val chipScale by animateFloatAsState(targetValue = if (selected) 1.05f else 1f, animationSpec = chipSpring, label = "chip_$tag")
+                FilterChip(selected = selected, onClick = { viewModel.setTag(tag) }, label = { Text(tag) }, modifier = Modifier.weight(1f).graphicsLayer { scaleX = chipScale; scaleY = chipScale })
+            }
+        }
+
+        Spacer(Modifier.height(28.dp))
+
+        Button(onClick = { viewModel.startOrPause() }, modifier = Modifier.fillMaxWidth().height(56.dp).graphicsLayer { scaleX = startScale; scaleY = startScale }, shape = RoundedCornerShape(20.dp), interactionSource = startInteraction) {
             Text(if (state.isRunning) "Pause" else "Start Focus", style = MaterialTheme.typography.titleMedium)
         }
-
         Spacer(Modifier.height(10.dp))
-        OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
-            Text("Reset")
-        }
+        OutlinedButton(onClick = { viewModel.reset() }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) { Text("Reset") }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(16.dp))
         Text("Sessions completed: ${state.completedSessions}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
     }
 }
-
-private fun formatTime(seconds: Int): String = "%02d:%02d".format(seconds / 60, seconds % 60)
