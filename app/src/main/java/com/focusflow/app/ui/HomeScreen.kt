@@ -2,6 +2,7 @@ package com.focusflow.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,41 +23,110 @@ fun HomeScreen(viewModel: PomodoroViewModel = viewModel()) {
     val state by viewModel.timerState.collectAsState()
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("FocusFlow", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(32.dp))
+        Text(
+            "FocusFlow",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            "Deep work, fewer distractions",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        )
 
-        Canvas(modifier = Modifier.size(260.dp)) {
-            val stroke = 16.dp.toPx()
-            drawArc(Color.LightGray, -90f, 360f, false, style = Stroke(stroke, cap = StrokeCap.Round),
-                topLeft = Offset(stroke / 2, stroke / 2), size = Size(size.width - stroke, size.height - stroke))
-            drawArc(if (state.isFocusPhase) Color(0xFF6750A4) else Color(0xFF625B71), -90f, 360f * state.progress, false,
-                style = Stroke(stroke, cap = StrokeCap.Round), topLeft = Offset(stroke / 2, stroke / 2),
-                size = Size(size.width - stroke, size.height - stroke))
+        Spacer(Modifier.height(40.dp))
+
+        Box(contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(280.dp)) {
+                val stroke = 18.dp.toPx()
+                val diameter = size.minDimension - stroke
+                val topLeft = Offset(stroke / 2, stroke / 2)
+                drawArc(
+                    color = Color.White.copy(alpha = 0.12f),
+                    startAngle = -90f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                    topLeft = topLeft,
+                    size = Size(diameter, diameter)
+                )
+                drawArc(
+                    color = if (state.isFocusPhase) Color(0xFF7C4DFF) else Color(0xFF26A69A),
+                    startAngle = -90f,
+                    sweepAngle = 360f * state.progress,
+                    useCenter = false,
+                    style = Stroke(stroke, cap = StrokeCap.Round),
+                    topLeft = topLeft,
+                    size = Size(diameter, diameter)
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    formatTime(state.remainingSeconds),
+                    fontSize = 56.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    if (state.isFocusPhase) state.currentTag else "Break",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
 
-        Spacer(Modifier.height(16.dp))
-        Text(formatTime(state.remainingSeconds), fontSize = 48.sp, fontWeight = FontWeight.Bold)
-        Text(if (state.isFocusPhase) "Focus · ${state.currentTag}" else "Break", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(36.dp))
 
-        Spacer(Modifier.height(24.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             listOf("Study", "Code", "Read", "Write").forEach { tag ->
-                FilterChip(selected = state.currentTag == tag, onClick = { viewModel.setTag(tag) }, label = { Text(tag) })
+                FilterChip(
+                    selected = state.currentTag == tag,
+                    onClick = { viewModel.setTag(tag) },
+                    label = { Text(tag) },
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
         Spacer(Modifier.height(32.dp))
-        Button(onClick = { viewModel.startOrPause() }, modifier = Modifier.fillMaxWidth(0.75f).height(56.dp)) {
-            Text(if (state.isRunning) "Pause" else "Start")
+
+        Button(
+            onClick = { viewModel.startOrPause() },
+            modifier = Modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                if (state.isRunning) "Pause" else "Start Focus",
+                style = MaterialTheme.typography.titleMedium
+            )
         }
+
         Spacer(Modifier.height(12.dp))
-        Button(onClick = { viewModel.reset() }) { Text("Reset") }
-        Spacer(Modifier.height(16.dp))
-        Text("Completed: ${state.completedSessions}")
+
+        OutlinedButton(
+            onClick = { viewModel.reset() },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text("Reset")
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "Sessions today: ${state.completedSessions}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+        )
     }
 }
 
-private fun formatTime(seconds: Int): String = "%02d:%02d".format(seconds / 60, seconds % 60)
+private fun formatTime(seconds: Int): String =
+    "%02d:%02d".format(seconds / 60, seconds % 60)
