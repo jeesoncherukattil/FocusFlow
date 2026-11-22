@@ -11,8 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.focusflow.app.service.AppBlocker
 import com.focusflow.app.service.BlockedAppsStore
 
@@ -21,6 +24,7 @@ data class DistractionApp(val name: String, val packageName: String, val icon: S
 @Composable
 fun BlockerScreen() {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val apps = listOf(
         DistractionApp("Instagram", "com.instagram.android", "IG"),
         DistractionApp("YouTube", "com.google.android.youtube", "YT"),
@@ -33,6 +37,16 @@ fun BlockerScreen() {
     val blocked by BlockedAppsStore.packages.collectAsState()
     val blocker = remember { AppBlocker(context) }
     var hasPermission by remember { mutableStateOf(blocker.hasUsagePermission()) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermission = blocker.hasUsagePermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)
@@ -55,7 +69,7 @@ fun BlockerScreen() {
             }
             Spacer(Modifier.height(16.dp))
         } else {
-            Text("✓ Usage Access granted", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+            Text("\u2713 Usage Access granted", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(12.dp))
         }
 
@@ -70,7 +84,10 @@ fun BlockerScreen() {
                         }
                         Spacer(Modifier.width(16.dp))
                         Text(app.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-                        Switch(checked = blocked.contains(app.packageName), onCheckedChange = { BlockedAppsStore.toggle(app.packageName) })
+                        Switch(
+                            checked = blocked.contains(app.packageName),
+                            onCheckedChange = { BlockedAppsStore.toggle(context.applicationContext as android.app.Application, app.packageName) }
+                        )
                     }
                 }
             }
