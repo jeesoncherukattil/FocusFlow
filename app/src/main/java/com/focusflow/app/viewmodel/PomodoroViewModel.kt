@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.focusflow.app.FocusFlowApp
 import com.focusflow.app.data.PomodoroSession
 import com.focusflow.app.iot.SmartHomeController
+import com.focusflow.app.service.AppBlocker
+import com.focusflow.app.service.BlockedAppsStore
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +29,7 @@ data class TimerState(
 class PomodoroViewModel(application: Application) : AndroidViewModel(application) {
     private val db = (application as FocusFlowApp).database
     private val smartHome = SmartHomeController()
+    private val appBlocker = AppBlocker(application)
 
     private val _timerState = MutableStateFlow(TimerState())
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
@@ -43,6 +46,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
         val state = _timerState.value
         if (state.isFocusPhase) {
             viewModelScope.launch { smartHome.onFocusStart() }
+            appBlocker.startMonitoring(BlockedAppsStore.packages.value)
         }
         _timerState.value = state.copy(isRunning = true)
         timerJob = viewModelScope.launch {
@@ -61,6 +65,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
 
     private fun pause() {
         timerJob?.cancel()
+        appBlocker.stopMonitoring()
         _timerState.value = _timerState.value.copy(isRunning = false)
     }
 
@@ -68,6 +73,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
         val state = _timerState.value
         if (state.isFocusPhase) {
             viewModelScope.launch { smartHome.onFocusEnd() }
+            appBlocker.stopMonitoring()
             saveSession(true)
             _timerState.value = state.copy(
                 isFocusPhase = false,
@@ -110,6 +116,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
 
     fun reset() {
         timerJob?.cancel()
+        appBlocker.stopMonitoring()
         _timerState.value = TimerState(currentTag = _timerState.value.currentTag)
     }
 }
