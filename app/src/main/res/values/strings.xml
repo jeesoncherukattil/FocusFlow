@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FocusFlow</string>
+    <string name="accessibility_service_description">FocusFlow uses accessibility to detect Reels and Shorts scrolling so it can show a conscious counter during breaks and help you rebuild attention.</string>
+</resources>
