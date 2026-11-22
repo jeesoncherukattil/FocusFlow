@@ -10,6 +10,7 @@ import com.focusflow.app.iot.SmartHomeController
 import com.focusflow.app.service.AppBlocker
 import com.focusflow.app.service.BlockedAppsStore
 import com.focusflow.app.service.PomodoroService
+import com.focusflow.app.service.ReelInterceptionService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,9 +34,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
     private val smartHome = SmartHomeController()
     private val appBlocker = AppBlocker(application)
 
-    init {
-        BlockedAppsStore.init(application)
-    }
+    init { BlockedAppsStore.init(application) }
 
     private val _timerState = MutableStateFlow(TimerState())
     val timerState: StateFlow<TimerState> = _timerState.asStateFlow()
@@ -53,8 +52,8 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
         if (state.isFocusPhase) {
             viewModelScope.launch { smartHome.onFocusStart() }
             appBlocker.startMonitoring(BlockedAppsStore.packages.value)
-            val intent = Intent(getApplication(), PomodoroService::class.java)
-            getApplication<Application>().startForegroundService(intent)
+            ReelInterceptionService.isFocusActive = true
+            getApplication<Application>().startForegroundService(Intent(getApplication(), PomodoroService::class.java))
         }
         _timerState.value = state.copy(isRunning = true)
         timerJob = viewModelScope.launch {
@@ -62,10 +61,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
                 delay(1000)
                 val s = _timerState.value
                 val progress = s.remainingSeconds.toFloat() / s.totalSeconds
-                _timerState.value = s.copy(
-                    remainingSeconds = s.remainingSeconds - 1,
-                    progress = progress
-                )
+                _timerState.value = s.copy(remainingSeconds = s.remainingSeconds - 1, progress = progress)
             }
             if (_timerState.value.remainingSeconds <= 0) onPhaseComplete()
         }
@@ -73,17 +69,21 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
 
     private fun pause() {
         timerJob?.cancel()
-        appBlocker.stopMonitoring()
-        getApplication<Application>().stopService(Intent(getApplication(), PomodoroService::class.java))
+        stopBlocking()
         _timerState.value = _timerState.value.copy(isRunning = false)
+    }
+
+    private fun stopBlocking() {
+        appBlocker.stopMonitoring()
+        ReelInterceptionService.isFocusActive = false
+        getApplication<Application>().stopService(Intent(getApplication(), PomodoroService::class.java))
     }
 
     private fun onPhaseComplete() {
         val state = _timerState.value
         if (state.isFocusPhase) {
             viewModelScope.launch { smartHome.onFocusEnd() }
-            appBlocker.stopMonitoring()
-            getApplication<Application>().stopService(Intent(getApplication(), PomodoroService::class.java))
+            stopBlocking()
             saveSession(true)
             _timerState.value = state.copy(
                 isRunning = false,
@@ -107,17 +107,15 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
     private fun saveSession(completed: Boolean) {
         viewModelScope.launch {
             try {
-                db.sessionDao().insert(
-                    PomodoroSession(
-                        activityTag = _timerState.value.currentTag,
-                        focusMinutes = focusMinutes,
-                        breakMinutes = breakMinutes,
-                        completed = completed,
-                        startTime = Instant.now().minusSeconds(focusMinutes * 60L),
-                        endTime = Instant.now()
-                    )
-                )
-            } catch (_: Exception) { }
+                db.sessionDao().insert(PomodoroSession(
+                    activityTag = _timerState.value.currentTag,
+                    focusMinutes = focusMinutes,
+                    breakMinutes = breakMinutes,
+                    completed = completed,
+                    startTime = Instant.now().minusSeconds(focusMinutes * 60L),
+                    endTime = Instant.now()
+                ))
+            } catch (_: Exception) {}
         }
     }
 
@@ -129,8 +127,7 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
 
     fun reset() {
         timerJob?.cancel()
-        appBlocker.stopMonitoring()
-        getApplication<Application>().stopService(Intent(getApplication(), PomodoroService::class.java))
+        stopBlocking()
         _timerState.value = TimerState(currentTag = _timerState.value.currentTag)
     }
 }
